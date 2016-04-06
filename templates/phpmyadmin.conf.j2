@@ -1,0 +1,9 @@
+Listen 10080
+<VirtualHost *:10080>
+    DocumentRoot /usr/share/phpMyAdmin
+    <Directory /usr/share/phpMyAdmin >
+		DirectoryIndex index.php
+		AllowOverride All
+		Require all granted
+	</Directory>
+</VirtualHost>

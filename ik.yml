@@ -1,0 +1,139 @@
+# crée ou vérifie l'arborescence attendue pour ik avec les liens symboliques
+# crée ou vérifie la configuration apache
+
+- hosts: all
+#  remote_user: admin
+  become: yes
+
+  vars:
+    root_ik: "/u"
+    path_ik: "{{ root_ik }}/apps/ik"
+    path_ikzend2: "{{ root_ik }}/apps/ikzend2"
+    path_outils: "{{ root_ik }}/outils"
+    path_backups: "{{ root_ik }}/backups"
+
+  tasks:
+    - name: "install subversion"
+      yum: name=svn state=present
+
+    - name: "create /u"
+      file: path={{ root_ik }} state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+
+    - stat: path={{ path_ik }}/outils
+      register: outils
+    - name: "install tools"
+      command: svn export {{ svn_tools }} {{ root_ik }}/outils --username {{ svn_username }} --password {{ svn_password }} --non-interactive --force --trust-server-cert
+      when: outils.stat.exists == False
+
+    - name: "first time install intraoop"
+      stat: path={{ path_ik }}/current
+      register: ikcurrent
+    - name: "create /u/apps/ik/releases/20160101010000"
+      file: path={{ path_ik }}/releases/20160101010000 state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+      when: ikcurrent.stat.exists == False and mode_development == False
+    - name: "link /u/apps/ik/current"
+      file: src={{ path_ik }}/releases/20160101010000 dest={{ path_ik }}/current state=directory state=link owner={{ ansible_ssh_user }} group=apache force=yes
+      when: ikcurrent.stat.exists == False and mode_development == False
+    - name: "svn export"
+      command: svn export {{ svn_ik_branch }} {{ path_ik }}/current --username {{ svn_username }} --password {{ svn_password }} --non-interactive --force --trust-server-cert
+      when: ikcurrent.stat.exists == False
+    - name: "configuration intraoop"
+      template: src=templates/ik_parametre_connexion_bdd.php.j2 dest={{ path_ik }}/current/intraoop/parametre_connexion_bdd.php
+      when: ikcurrent.stat.exists == False
+
+    - name: "first time install ikzend2"
+      stat: path={{ path_ikzend2 }}/current
+      register: ikz2current
+    - name: "create /u/apps/ikzend2/releases/20160101010000"
+      file: path={{ path_ikzend2 }}/releases/20160101010000 state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+      when: ikz2current.stat.exists == False and mode_development == False
+    - name: "link /u/apps/ikzend2/current"
+      file: src={{ path_ikzend2 }}/releases/20160101010000 dest={{ path_ikzend2 }}/current state=directory state=link owner={{ ansible_ssh_user }} group=apache force=yes
+      when: ikz2current.stat.exists == False and mode_development == False
+    - name: "svn export"
+      command: svn export {{ svn_ikzend2_branch }} {{ path_ikzend2 }}/current --username {{ svn_username }} --password {{ svn_password }} --non-interactive --force --trust-server-cert
+      when: ikz2current.stat.exists == False
+    - name: "configuration ikzend2"
+      template: src=templates/ik_conf_ikzend2.php.j2 dest={{ path_ikzend2 }}/current/config/autoload/config.local.php
+      when: ikz2current.stat.exists == False
+
+    - name: "create /u/backups"
+      file: path={{ path_backups }} state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+
+    - name: "create /u/apps/ik/shared"
+      file: path={{ path_ik }}/shared state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+    - name: "create /u/apps/ik/shared/data"
+      file: path={{ path_ik }}/shared/data state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+    - name: "create /u/apps/ik/shared/i18n"
+      file: path={{ path_ik }}/shared/i18n state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+    - name: "create /u/apps/ik/shared/cache"
+      file: path={{ path_ik }}/shared/cache state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+    - name: "create /u/apps/ik/shared/data_temp"
+      file: path={{ path_ik }}/shared/data_temp state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+    - name: "create /u/apps/ik/current/bibliotheque"
+      file: path={{ path_ik }}/current/bibliotheque state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+    - name: "create /u/apps/ik/current/data_temp"
+      file: path={{ path_ik }}/current/data_temp state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+    - name: "create /u/apps/ik/current/intraoop"
+      file: path={{ path_ik }}/current/intraoop state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+
+    - name: "create /u/apps/ikzend2/shared/config/autoload"
+      file: path={{ path_ikzend2 }}/shared/config/autoload state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+    - name: "create /u/apps/ikzend2/shared/uploads"
+      file: path={{ path_ikzend2 }}/shared/uploads state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+    - name: "create /u/apps/ikzend2/current/public"
+      file: path={{ path_ikzend2 }}/current/public state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+    - name: "link /u/apps/ikzend2/current/public/bibliotheque"
+      file: src={{ path_ik }}/current/bibliotheque dest={{ path_ikzend2 }}/current/public/bibliotheque state=link owner={{ ansible_ssh_user }} group=apache force=yes
+    - name: "link /u/apps/ikzend2/current/public/data_temp"
+      file: src={{ path_ik }}/current/data_temp dest={{ path_ikzend2 }}/current/public/data_temp state=link owner={{ ansible_ssh_user }} group=apache force=yes
+    - name: "link /u/apps/ikzend2/current/public/intraoop"
+      file: src={{ path_ik }}/current/intraoop dest={{ path_ikzend2 }}/current/public/intraoop state=link owner={{ ansible_ssh_user }} group=apache force=yes
+
+    - name: "create /u/apps/ik/current/intraoop/q_incident"
+      file: path={{ path_ik }}/current/intraoop/q_incident state=directory owner={{ ansible_ssh_user }} group=apache mode=0775
+    - name: "link /u/apps/ik/current/intraoop/q_incident_risque"
+      file: src={{ path_ik }}/current/intraoop/q_incident dest={{ path_ik }}/current/intraoop/q_incident_risque state=link owner={{ ansible_ssh_user }} group=apache
+    - name: "link /u/apps/ik/current/intraoop/q_incident_securite"
+      file: src={{ path_ik }}/current/intraoop/q_incident dest={{ path_ik }}/current/intraoop/q_incident_securite state=link owner={{ ansible_ssh_user }} group=apache
+    - name: "link /u/apps/ik/current/intraoop/q_incident_referentiel"
+      file: src={{ path_ik }}/current/intraoop/q_incident dest={{ path_ik }}/current/intraoop/q_incident_referentiel state=link owner={{ ansible_ssh_user }} group=apache
+    - name: "link /u/apps/ik/current/intraoop/q_incident_ticket"
+      file: src={{ path_ik }}/current/intraoop/q_incident dest={{ path_ik }}/current/intraoop/q_incident_ticket state=link owner={{ ansible_ssh_user }} group=apache
+
+    - name: "configuration Apache ik.conf"
+      template: src=templates/ik.conf.j2 dest=/etc/httpd/conf/ik.conf
+      notify:
+        - restart apache
+
+    - name: "configuration Apache httpd.conf"
+      template: src=templates/httpd.conf.j2 dest=/etc/httpd/conf/httpd.conf
+      notify:
+        - restart apache
+
+    - name: "configuration Apache ssl.conf"
+      template: src=templates/ssl.conf.j2 dest=/etc/httpd/conf.d/ssl.conf
+      notify:
+        - restart apache
+
+    - name: "installation npm intraoop"
+      command: npm install chdir={{ path_ik }}/current/intraoop
+      when: ikcurrent.stat.exists == False
+    - name: "gulp intraoop"
+      command: gulp production chdir={{ path_ik }}/current/intraoop
+      when: ikcurrent.stat.exists == False
+    - name: "installation npm ikzend2"
+      command: npm install chdir={{ path_ikzend2 }}/current
+      when: ikz2current.stat.exists == False
+    - name: "gulp ikzend2"
+      command: gulp production chdir={{ path_ikzend2 }}/current
+      when: ikz2current.stat.exists == False
+
+    - name: "change ownership recursively /u/apps/ik"
+      file: path={{ path_ik }} state=directory recurse=yes owner={{ ansible_ssh_user }} group=apache mode=0775
+    - name: "change ownership recursively /u/apps/ikzend2"
+      file: path={{ path_ikzend2 }} state=directory recurse=yes owner={{ ansible_ssh_user }} group=apache mode=0775
+
+  handlers:
+    - name: "restart apache"
+      service: name=httpd state=restarted

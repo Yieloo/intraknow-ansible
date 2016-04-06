@@ -1,0 +1,12 @@
+hostname: myserver
+mode_development: False
+firewall: False
+ik_db_password: mdpbdd
+ik_db_host: localhost
+ik_db_user: root
+ik_elasticsearch_host: localhost
+svn_username: olivier
+svn_password: 'mdpsvn'
+svn_ik_branch: https://svn.oopartners.ovh/svn/intraknow/branches/ik_prod
+svn_ikzend2_branch: https://svn.oopartners.ovh/svn/intraknow-zend/branches/ikzend2_prod
+svn_tools: https://svn.oopartners.ovh/svn/poste_developpement/trunk

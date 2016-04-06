@@ -1,0 +1,11 @@
+[DEFAULT]
+bantime = 3600
+banaction = firewallcmd-ipset
+backend = systemd
+
+[sshd]
+enabled = true
+port = ssh
+logpath = %(sshd_log)s
+maxretry = 5
+bantime = 86400

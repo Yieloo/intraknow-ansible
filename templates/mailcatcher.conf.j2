@@ -1,0 +1,10 @@
+[Unit]
+Description=Simple SMTP server which catches any message sent to it to display in a web interface
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/mailcatcher -f --http-ip 0.0.0.0  --http-port 1080  --smtp-port 25
+TimeoutSec=300
+
+[Install]
+WantedBy=multi-user.target

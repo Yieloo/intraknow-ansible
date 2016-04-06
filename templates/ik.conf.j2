@@ -1,0 +1,19 @@
+DocumentRoot /u/apps/ikzend2/current/public 
+<Directory /u/apps/ikzend2/current/public >
+	DirectoryIndex index.php
+	AllowOverride All
+	Require all granted
+</Directory>
+
+Alias /data_temp /u/apps/ik/current/data_temp
+<Directory /u/apps/ik/current/data_temp>
+	Options +Indexes
+	DirectoryIndex index.php
+	Require all granted
+	AllowOverride all
+</Directory>
+
+Alias /bibliotheque /u/apps/ikzend2/current/public/bibliotheque
+AliasMatch ^/[a-zA-Z0-9\-_]+/z2/(.*)$ /u/apps/ikzend2/current/public/$1
+AliasMatch ^/[a-zA-Z0-9\-_]+/(.*)$ /u/apps/ikzend2/current/public/intraoop/$1
+AliasMatch ^/[a-zA-Z0-9\-_]+$ /u/apps/ikzend2/current/public/intraoop

@@ -1,0 +1,231 @@
+<?php
+
+if(PHP_SAPI == 'cli'){ //mode console
+
+    $platform = $_SERVER['argv'][1];
+
+    if(empty($platform)){
+        echo 'Le premier argument doit correspondre à l\'alias de la plateforme ('. __FILE__ .') !';
+        exit();
+    }
+}else{ //mode HTTP
+    $pathParts = explode("/", trim($_SERVER['REQUEST_URI'], "/"));
+    //platform = alias = premier segment d'url
+    $platform = $pathParts[0];
+
+    if(empty($platform)){
+        \IntraknowUtils\Logger\IKLogger::getInfoLogger()->debug("Alias plateforme non valide : $platform");
+        header("Status: 301 Moved Permanently", false, 301);
+        header("Location: http://www.intraknow.com");
+        exit();
+    }
+}
+
+//alias de la base de données
+$db_name = 'intraknow_' . $platform;
+
+return array(
+    'intraoop_path' => '{{ path_ik }}/current/intraoop/',
+    // commande de l'application d'impression. si cette variable n'est pas definie, la commande par defaut sera 'wkhtmltopdf'
+    'command' => array(
+        'print' => '{{ path_ikzend2 }}/current/public/bibliotheque/phantomjs/rasterize.sh'
+    ),
+    'cloudmail' => array(
+        'provider' => 'Mailjet', //Mailjet, Mailgun, ...
+        'Mailjet' => array(
+            'apiKey' => '6dcc1166a12a20f076ded2584ded01c9',
+            'apiPassword' => '790992fffacb9aedce6d0163a8d2da16',
+        )
+    ),
+    'elasticsearch' => array(
+        'connection' => array(
+            'host' => '{{ ik_elasticsearch_host }}'
+        )
+    ),
+    'zenddevelopertools' => array(
+        /**
+         * General Profiler settings
+         */
+        'profiler' => array(
+            /**
+             * Enables or disables the profiler.
+             *
+             * Expects: boolean
+             * Default: false
+             */
+            'enabled' => false,
+
+            /**
+             * Enables or disables the strict mode. If the strict mode is
+             * enabled, any error will throw an exception, otherwise all
+             * errors will be added to the report (and shown in the toolbar).
+             *
+             * Expects: boolean
+             * Default: true
+             */
+            'strict' => false,
+
+            /**
+             * If enabled, the profiler tries to flush the content before the it
+             * starts collecting data. This option will be ignored if the Toolbar
+             * is enabled.
+             *
+             * Note: The flush listener listens to the MvcEvent::EVENT_FINISH event
+             *       with a priority of -9400. You have to disbale this function if
+             *       you wish to modify the output with a lower priority.
+             *
+             * Expects: boolean
+             * Default: false
+             */
+            'flush_early' => false,
+
+            /**
+             * The cache directory is used in the version check and for every storage
+             * type that writes to the disk.
+             *
+             * Note: The default value assumes that the current working directory is the
+             *       application root.
+             *
+             * Expects: string
+             * Default: 'data/cache'
+             */
+            'cache_dir' => 'data/cache',
+
+            /**
+             * If a matches is defined, the profiler will be disabled if the
+             * request does not match the pattern.
+             *
+             * Example: 'matcher' => array('ip' => '127.0.0.1')
+             *          OR
+             *          'matcher' => array('url' => array('path' => '/admin')
+             *
+             * Note: The matcher is not implemented yet!
+             */
+            'matcher' => array(),
+
+            /**
+             * Contains a list with all collector the profiler should run.
+             * Zend Developer Tools ships with 'db' (Zend\Db), 'time', 'event', 'memory',
+             * 'exception', 'request' and 'mail' (Zend\Mail). If you wish to disable a default
+             * collector, simply set the value to null or false.
+             *
+             * Example: 'collectors' => array('db' => null)
+             *
+             * Expects: array
+             */
+            'collectors' => array(),
+        ),
+        /**
+         * General Toolbar settings
+         */
+        'toolbar' => array(
+            /**
+             * Enables or disables the Toolbar.
+             *
+             * Expects: boolean
+             * Default: false
+             */
+            'enabled' => false,
+
+            /**
+             * If enabled, every empty collector will be hidden.
+             *
+             * Expects: boolean
+             * Default: false
+             */
+            'auto_hide' => true,
+
+            /**
+             * The Toolbar position.
+             *
+             * Expects: string ('bottom' or 'top')
+             * Default: bottom
+             */
+            'position' => 'bottom',
+
+            /**
+             * If enabled, the Toolbar will check if your current Zend Framework version
+             * is up-to-date.
+             *
+             * Note: The check will only occur once every hour.
+             *
+             * Expects: boolean
+             * Default: false
+             */
+            'version_check' => true,
+
+            /**
+             * Contains a list with all collector toolbar templates. The name
+             * of the array key must be same as the name of the collector.
+             *             *
+             * Example: 'profiler' => array(
+             *              'collectors' => array(
+             *                  // My_Collector_Example::getName() -> mycollector
+             *                  'MyCollector' => 'My_Collector_Example',
+             *              )
+             *          ),
+             *          'toolbar' => array(
+             *              'entries' => array(
+             *                  'mycollector' => 'example/toolbar/my-collector',
+             *              )
+             *          ),
+             *
+             * Expects: array
+             */
+            'entries' => array(),
+        ),
+    ),
+    'doctrine' => array(
+        'connection' => array(
+            'orm_default' => array(
+                'driverClass' => 'Doctrine\DBAL\Driver\PDOMySql\Driver',
+                'params' => array(
+                    'host' => '{{ ik_db_host }}',
+                    'port' => '3306',
+                    'user' => '{{ ik_db_user }}',
+                    'password' => '{{ ik_db_password }}',
+                    'dbname' => $db_name,
+                    'driverOptions' => array(
+                        \PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8'
+                    )
+                ),
+                'doctrine_type_mappings' => array(
+                    'enum' => 'string'
+                )
+            ),
+            $db_name => array(
+                'driverClass' => 'Doctrine\DBAL\Driver\PDOMySql\Driver',
+                'params' => array(
+                    'host' => '{{ ik_db_host }}',
+                    'port' => '3306',
+                    'user' => '{{ ik_db_user }}',
+                    'password' => '{{ ik_db_password }}',
+                    'dbname' => $db_name,
+                    'driverOptions' => array(
+                        \PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8'
+                    )
+                ),
+                'doctrine_type_mappings' => array(
+                    'enum' => 'string'
+                )
+            ),
+        ),
+
+        'entitymanager' => array(
+            'orm_default' => array(
+                'connection' => 'orm_default',
+                'configuration' => 'orm_default'
+            ),
+            $db_name => array(
+                'connection' => $db_name,
+                'configuration' => 'orm_default'
+            )
+        )
+    ),
+    'service_manager' => array(
+        'factories' => array(
+            'doctrine.entitymanager.' . $db_name => new DoctrineORMModule\Service\EntityManagerFactory($db_name),
+            'doctrine.connection.' . $db_name => new DoctrineORMModule\Service\DBALConnectionFactory($db_name),
+        )
+    )
+);

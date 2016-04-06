@@ -1,0 +1,291 @@
+---
+- hosts: all 
+  become: yes
+
+  roles:
+    - { role: geerlingguy.java }
+    - { role: geerlingguy.elasticsearch }
+
+  tasks:
+    - selinux: state=disabled
+    - hostname: name={{ hostname }}
+
+    ################################
+    # SSH
+    ################################
+    
+    - name: "disallow root SSH access"
+      action: lineinfile dest=/etc/ssh/sshd_config regexp="^PermitRootLogin" line="PermitRootLogin no" state=present
+      notify: restart sshd
+    - name: "allow SSH v2 only"
+      action: lineinfile dest=/etc/ssh/sshd_config regexp="^Protocol" line="Protocol 2" state=present
+      notify: restart sshd
+    - name: "disallow password authentication"
+      action: lineinfile dest=/etc/ssh/sshd_config regexp="^PasswordAuthentication" line="PasswordAuthentication no" state=present
+      notify: restart sshd
+      
+    ####################
+    # EPEL
+    # https://www.zigg.com/2013/yum-repository-bootstrapping-ansible.html
+    ####################
+    - name: "install epel repositories"
+      copy: src=files/ansible-bootstrap-epel.repo
+        dest=/etc/yum.repos.d
+        owner=root group=root mode=0644
+    - name: "epel-release install"
+      yum: name=epel-release
+       enablerepo=ansible-bootstrap-epel
+       state=present
+    - name: "epel repository enable"
+      ini_file: dest=/etc/yum.repos.d/epel.repo
+       section=epel
+       option=enabled
+       value=1
+
+    ####################
+    # REDIS
+    ####################
+    - name: "redis install"
+      yum: name=redis state=present
+    - name: start redis
+      service: name=redis state=started enabled=true
+      
+    ################################
+    # Fail2ban, firewall, yum-cron
+    ################################
+    
+    - name: "install fail2ban"
+      yum: name={{ item }} state=present
+      with_items:
+       - fail2ban
+       - fail2ban-systemd
+      when: firewall == True
+    - name: "configure fail2ban"
+      template: src=fail2ban.conf.j2 dest=/etc/fail2ban/jail.d/local.conf owner=root group=root mode=0644
+      notify: restart fail2ban
+      when: firewall == True
+    - name: "start the fail2ban service"
+      service: name=fail2ban state=started enabled=true
+      when: firewall == True
+
+    - name: "disable iptables firewall"
+      service: name=firewalld state=stopped enabled=false
+      when: firewall == False
+    - name: "start the firewalld service"
+      service: name=firewalld state=started enabled=true
+      when: firewall == True
+    - name: "assign private nic to trusted zone"
+      command: firewall-cmd --set-default-zone=trusted
+      notify: restart firewalld
+      when: firewall == True
+
+#    - name: install yum-cron
+#      yum: name=yum-cron state=present
+
+    ###################
+    # Time management
+    ###################
+
+    - name: "set local timezone"
+      command: timedatectl set-timezone Europe/Paris
+
+    - name: "install NTP (and update apt cache for the first install)"
+      yum: name=ntp state=present update_cache=yes
+
+    - name: "start the ntp service"
+      service: name=ntpd state=started enabled=true
+
+            
+    ###################
+    # Misc. tools
+    ###################
+    - name: "install useful system tools"
+      yum: name={{ item }} state=present
+      with_items:
+        - vim
+        - htop
+        - iotop
+        - tree
+        - screen
+        - git
+        - ncdu
+        - bzip2
+        - unzip
+        - nano
+        - wget
+        
+    ###################
+    # Misc. applications
+    ###################
+
+    - name: "install Apache and PHP servers"
+      yum: name={{ item }} state=present
+      tags: php
+      with_items:
+        - httpd
+        - mod_ssl
+        - php
+        - php-devel
+        - php-mysqlnd 
+        - php-intl 
+        - php-php-gettext
+        - php-imap 
+        - php-ldap 
+        - php-dom 
+        - php-pdo  
+        - php-mbstring 
+        - php-gd 
+        - php-soap 
+        - phpmyadmin 
+        - php-mcrypt 
+        - libmcrypt 
+        - php-bcmath 
+        - php-pecl-apc
+        - php-pecl-redis
+
+    - name: "add admin user to group apache"
+      user: name={{ ansible_ssh_user }} groups=apache append=yes
+
+    - name: "install OpCache"
+      yum: name=php-pecl-zendopcache state=present
+      when: mode_development == False
+      tags: php
+
+    - name: "configure OpCache"
+      template: src=opcache.ini.j2 dest=/etc/php.d/opcache.ini
+      when: mode_development == False
+      notify:
+        - restart apache
+      tags: db
+    - name: "install xdebug"
+      yum: name=php-pecl-xdebug state=present
+      when: mode_development == True
+    - name: "configure xdebug remote_enable"
+      lineinfile: dest=/etc/php.d/xdebug.ini line="xdebug.remote_enable=1" state=present
+      when: mode_development == True
+      notify: restart apache
+    - name: "configure xdebug remote_handler"
+      lineinfile: dest=/etc/php.d/xdebug.ini line="xdebug.remote_handler=dbgp" state=present
+      when: mode_development == True
+      notify: restart apache
+    - name: "configure xdebug remote_connect_back"
+      lineinfile: dest=/etc/php.d/xdebug.ini line="xdebug.remote_connect_back=1" state=present
+      when: mode_development == True
+      notify: restart apache
+    - name: "configure xdebug remote_port"
+      lineinfile: dest=/etc/php.d/xdebug.ini line="xdebug.remote_port=9000" state=present
+      when: mode_development == True
+      notify: restart apache
+    - name: "configure xdebug remote_log"
+      lineinfile: dest=/etc/php.d/xdebug.ini line="xdebug.remote_log='/var/log/httpd/xdebug.log'" state=present
+      when: mode_development == True
+      notify: restart apache
+
+    - name: "configure PHP"
+      template: src=templates/php.ini.j2 dest=/etc/php.ini
+      notify:
+        - restart apache
+      
+    - name: "configure phpMyAdmin"
+      template: src=templates/phpmyadmin.conf.j2 dest=/etc/httpd/conf.d/phpMyAdmin.conf
+      notify:
+        - restart apache
+      tags: db
+      
+    - name: "start Apache server"
+      service: name=httpd state=started enabled=yes
+      
+    - name: "install MariaDB Server"
+      yum: name=mariadb-server state=present
+      tags: db
+    - name: "install MySQL-python binding"
+      yum: name=MySQL-python  state=present
+    - name: "start MariaDB Server"
+      service: name=mariadb state=started enabled=yes
+      tags: db
+      # http://stackoverflow.com/questions/16444306/ansible-idempotent-mysql-installation-playbook
+    - name: "update mysql root password for all root accounts"
+      mysql_user: name=root host={{ item }} password={{ ik_db_password }} priv=*.*:ALL,GRANT
+      with_items:
+        - "{{ ansible_hostname }}"
+        - 127.0.0.1
+        - ::1
+        - localhost
+      tags: db
+    - name: "copy .my.cnf file with root password credentials"
+      template: src=templates/root.my.cnf.j2 dest=/root/.my.cnf owner=root mode=0600
+      tags: db
+    - name: "delete test database"
+      mysql_db: db=test state=absent
+      tags: db
+
+    ###################
+    # Composer, NodeJS
+    ###################
+    - name: install composer
+      shell: curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/bin creates=/usr/bin/composer
+      tags: composer
+    - name: rename composer.phar to composer if it was already installed
+      shell: mv /usr/bin/composer.phar /usr/bin/composer creates=/usr/bin/composer
+      tags: composer
+    - name: make composer executable
+      file: path=/usr/bin/composer mode=a+x state=file
+      tags: composer
+    - name: install npm
+      yum: name=npm state=present
+    - name: install npm packages NodeJS
+      yum: name=nodejs state=present
+    - name: install bower
+      shell: npm install -g bower creates=/usr/bin/bower
+    - name: install gulp
+      shell: npm install -g gulp creates=/usr/bin/gulp
+    - name: install phantomjs
+      shell: npm install -g phantomjs@1.9.8 creates=/usr/bin/phantomjs
+    - name: install casperjs
+      shell: npm install -g casperjs creates=/usr/bin/casperjs
+
+    ##################################################
+    # MailCatcher
+    ##################################################
+
+    - name: "install Mailcatcher prerequisite"
+      yum: name={{ item }} state=present
+      with_items:
+        - gcc
+        - gcc-c++
+        - sqlite-devel
+        - ruby-devel
+      when: mode_development == True
+      tags: mail
+    - name: "install Mailcatcher"
+      command: gem install mailcatcher
+      when: mode_development == True
+      tags: mail
+    - name: "configure service Mailcatcher"
+      template: src=templates/mailcatcher.conf.j2 dest=/etc/systemd/system/mailcatcher.service
+      when: mode_development == True
+      tags: mail
+    - name: "start Mailcatcher"
+      service: name=mailcatcher state=started enabled=true
+      when: mode_development == True
+      tags: mail
+    - name: "configure PHP for Mailcatcher"
+      lineinfile: dest=/etc/php.ini regexp="^sendmail_path" line="sendmail_path=catchmail" state=present
+      when: mode_development == True
+      notify:
+        - restart apache
+      tags: mail
+
+    - lineinfile: dest=/etc/bashrc line="export IK_DB_HOST={{ ik_db_host }}"
+    - lineinfile: dest=/etc/bashrc line="export IK_DB_USER={{ ik_db_user }}"
+    - lineinfile: dest=/etc/bashrc line="export IK_DB_PASSWORD={{ ik_db_password }}"
+
+  handlers:
+    - name: restart sshd
+      action: service name=sshd state=restarted    
+    - name: restart apache
+      service: name=httpd state=restarted
+    - name: restart fail2ban
+      service: name=fail2ban state=restarted
+    - name: restart firewalld
+      service: name=firewalld state=restarted
