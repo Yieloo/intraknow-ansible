@@ -61,7 +61,7 @@
        - fail2ban-systemd
       when: firewall == True
     - name: "configure fail2ban"
-      template: src=fail2ban.conf.j2 dest=/etc/fail2ban/jail.d/local.conf owner=root group=root mode=0644
+      template: src=templates/fail2ban.conf.j2 dest=/etc/fail2ban/jail.d/local.conf owner=root group=root mode=0644
       notify: restart fail2ban
       when: firewall == True
     - name: "start the fail2ban service"
@@ -152,7 +152,7 @@
       tags: php
 
     - name: "configure OpCache"
-      template: src=opcache.ini.j2 dest=/etc/php.d/opcache.ini
+      template: src=templates/opcache.ini.j2 dest=/etc/php.d/opcache.ini
       when: mode_development == False
       notify:
         - restart apache
